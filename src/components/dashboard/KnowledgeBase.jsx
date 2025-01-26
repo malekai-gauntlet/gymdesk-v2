@@ -161,6 +161,32 @@ export default function KnowledgeBase() {
     }
   }
 
+  // Add filtered entries computation
+  const filteredEntries = entries.filter(entry => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const titleMatch = entry.title?.toLowerCase().includes(query);
+    const contentMatch = entry.content?.toLowerCase().includes(query);
+    const tagsMatch = entry.tags?.some(tag => tag.toLowerCase().includes(query));
+    
+    return titleMatch || contentMatch || tagsMatch;
+  });
+
+  // Add highlight function
+  const highlightMatch = (text, query) => {
+    if (!query.trim() || !text) return text;
+    
+    const regex = new RegExp(`(${query})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, i) => 
+      regex.test(part) ? (
+        <span key={i} className="bg-yellow-200">{part}</span>
+      ) : part
+    );
+  };
+
   return (
     <div className="flex-1 p-8 bg-gray-50">
       {/* Breadcrumb */}
@@ -231,28 +257,36 @@ export default function KnowledgeBase() {
                       </div>
                     </td>
                   </tr>
-                ) : entries.length === 0 ? (
+                ) : filteredEntries.length === 0 ? (
                   <tr>
                     <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
-                      No entries found. Click "Add Entry" to create one.
+                      {searchQuery.trim() 
+                        ? "No entries found matching your search."
+                        : "No entries found. Click \"Add Entry\" to create one."}
                     </td>
                   </tr>
                 ) : (
-                  entries.map((entry) => (
+                  filteredEntries.map((entry) => (
                     <tr 
                       key={entry.id}
                       onClick={() => setSelectedEntry(entry)}
                       className={`cursor-pointer hover:bg-gray-50 ${selectedEntry?.id === entry.id ? 'bg-blue-50' : ''}`}
                     >
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{entry.title}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {highlightMatch(entry.title, searchQuery)}
+                        </div>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {entry.tags?.map((tag, index) => (
                             <span
                               key={index}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                searchQuery && tag.toLowerCase().includes(searchQuery.toLowerCase())
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-blue-100 text-blue-800'
+                              }`}
                             >
-                              {tag}
+                              {highlightMatch(tag, searchQuery)}
                             </span>
                           ))}
                         </div>
