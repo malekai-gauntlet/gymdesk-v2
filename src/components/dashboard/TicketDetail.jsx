@@ -311,6 +311,8 @@ export default function TicketDetail({ ticket, onClose }) {
   const handleAIResponse = async () => {
     try {
       setIsGeneratingAIResponse(true)
+      setReplyText('') // Clear existing text
+      
       console.log('Generating AI response for ticket:', {
         title: ticket.title,
         description: ticket.description,
@@ -319,16 +321,18 @@ export default function TicketDetail({ ticket, onClose }) {
         agentPosition: agentData?.role || 'Support Team'
       })
       
-      // Call the OpenAI function with member and agent info
+      // Call the OpenAI function with streaming callback
       const aiResponse = await generateTicketResponseWithTracing({
         ...ticket,
         memberName: `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim() || 'Customer',
         agentName: agentData ? `${agentData.first_name || ''} ${agentData.last_name || ''}`.trim() : 'Support Agent',
         agentPosition: agentData?.role || 'Support Team'
+      }, (token) => {
+        // Update the textarea with each new token
+        setReplyText(prev => prev + token)
       })
-      console.log('AI Response received:', aiResponse)
       
-      // Set the AI response in the textarea
+      // Set the final response (includes citations)
       setReplyText(aiResponse)
       toast.success('AI response generated')
       

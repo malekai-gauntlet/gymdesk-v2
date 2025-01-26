@@ -14,7 +14,7 @@ export default function DashboardLayout() {
 
   const handleViewChange = (view) => {
     // For settings-related views, keep selectedView as 'settings'
-    if (['settings', 'billing', 'people-team-members'].includes(view)) {
+    if (['settings', 'billing', 'people-team-members', 'knowledge-base'].includes(view)) {
       setSelectedView('settings')
       setActiveSection(view)
     } else {

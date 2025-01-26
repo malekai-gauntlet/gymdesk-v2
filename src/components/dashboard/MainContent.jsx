@@ -9,6 +9,7 @@ import TeamMembers from './TeamMembers'
 import { toast } from 'react-hot-toast'
 import NewTicketModal from './NewTicketModal'
 import { useAuth } from '../../components/auth/AuthContext'
+import KnowledgeBase from './KnowledgeBase'
 
 export default function MainContent({ view, selectedTicket, onTicketSelect, filteredTickets, selectedCategory }) {
   const { user } = useAuth()
@@ -259,6 +260,8 @@ export default function MainContent({ view, selectedTicket, onTicketSelect, filt
         return <CustomerList />
       case 'people-team-members':
         return <TeamMembers />
+      case 'knowledge-base':
+        return <KnowledgeBase />
       default:
         return (
           <div className="p-6">
