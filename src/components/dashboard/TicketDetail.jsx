@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { toast } from 'react-hot-toast'
 import { sendTicketNotification } from '../../lib/supabaseClient'
 import EmojiPicker from 'emoji-picker-react'
-import { generateTicketResponse } from '../../lib/openaiClient'
+import { generateTicketResponseWithTracing } from '../../lib/openaiClient'
 import { useAuth } from '../../components/auth/AuthContext'
 
 export default function TicketDetail({ ticket, onClose }) {
@@ -320,7 +320,7 @@ export default function TicketDetail({ ticket, onClose }) {
       })
       
       // Call the OpenAI function with member and agent info
-      const aiResponse = await generateTicketResponse({
+      const aiResponse = await generateTicketResponseWithTracing({
         ...ticket,
         memberName: `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim() || 'Customer',
         agentName: agentData ? `${agentData.first_name || ''} ${agentData.last_name || ''}`.trim() : 'Support Agent',
