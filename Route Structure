@@ -1,0 +1,9 @@
+/                     # Landing page with login options
+├── /member
+│   ├── /login       # Member login
+│   ├── /dashboard   # Member homepage
+│   └── /support     # Ticket submission
+└── /admin
+    ├── /login       # Staff login
+    ├── /dashboard   # Staff dashboard
+    └── /tickets     # Ticket management
