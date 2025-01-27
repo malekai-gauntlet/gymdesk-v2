@@ -40,7 +40,7 @@ const AIAssistant = () => {
       // Add user context
       const userContext = `\nMember Context:
 - Name: ${user?.user_metadata?.first_name} ${user?.user_metadata?.last_name}
-- Membership Status: Premium Member
+- Membership Status: Member
 - Email: ${user?.email}`
 
       const completion = await openai.chat.completions.create({
