@@ -1,9 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { supabase, sendTicketNotification } from '../../lib/supabaseClient'
-import openai from '../../lib/openaiClient'
+import { OpenAI } from 'openai'
 import { toast } from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
+import AIAssistant from './ai/AIAssistant'
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
+})
 
 // Components for each section
 const VisitHistory = () => {
@@ -54,7 +61,7 @@ const UpcomingEvents = () => (
             <p className="font-medium">HIIT Class</p>
             <p className="text-sm text-gray-400">Tomorrow, 9:00 AM</p>
           </div>
-          <button className="text-sm text-[#e12c4c] hover:text-[#d11b3b]">
+          <button className="text-sm text-indigo-400 hover:text-indigo-300">
             Cancel
           </button>
         </div>
@@ -65,7 +72,7 @@ const UpcomingEvents = () => (
             <p className="font-medium">PT Session with John</p>
             <p className="text-sm text-gray-400">Jan 20, 2:00 PM</p>
           </div>
-          <button className="text-sm text-[#e12c4c] hover:text-[#d11b3b]">
+          <button className="text-sm text-indigo-400 hover:text-indigo-300">
             Reschedule
           </button>
         </div>
@@ -563,6 +570,7 @@ const SupportForm = () => {
 }
 
 const WorkoutLog = () => {
+  const { user } = useAuth()
   const [workoutData, setWorkoutData] = useState([
     {
       id: 1,
@@ -595,6 +603,46 @@ const WorkoutLog = () => {
       notes: 'Feeling strong today, might increase weight next session'
     }
   ])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  // Fetch workout history from Supabase
+  const fetchWorkoutHistory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('workout_history')
+        .select('*')
+        .order('date', { ascending: false })
+
+      if (error) throw error
+
+      if (data) {
+        // Transform Supabase data to match current format
+        const transformedData = data.map(workout => ({
+          id: workout.id,
+          date: new Date(workout.date).toLocaleDateString(),
+          exercise: workout.exercise,
+          weight: workout.weight || '',
+          sets: workout.sets?.toString() || '',
+          reps: workout.reps?.toString() || '',
+          bodyweight: workout.bodyweight?.toString() || '',
+          notes: workout.notes || ''
+        }))
+        setWorkoutData(transformedData)
+      }
+    } catch (error) {
+      console.error('Error fetching workout history:', error)
+      setError(error.message)
+      // Keep the default workout data as fallback
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Add useEffect to fetch data on component mount
+  useEffect(() => {
+    fetchWorkoutHistory()
+  }, [])
 
   // Initialize speech recognition and states
   const [recognition, setRecognition] = useState(null)
@@ -677,7 +725,7 @@ const WorkoutLog = () => {
       const cleanedData = cleanWorkoutData(parsedData)
       console.log('Cleaned workout data:', cleanedData)
 
-      const workoutEntry = createWorkoutEntry(cleanedData)
+      const workoutEntry = await createWorkoutEntry(cleanedData)
       console.log('Created workout entry:', workoutEntry)
 
       // Add new workout entry to the state
@@ -761,36 +809,126 @@ const WorkoutLog = () => {
     }
   }
 
-  const handleCellChange = (id, field, newValue) => {
+  const handleCellChange = async (id, field, newValue) => {
+    // Optimistically update UI
     setWorkoutData(workoutData.map(workout => 
       workout.id === id 
         ? { ...workout, [field]: newValue }
         : workout
     ))
-  }
 
-  // Update createWorkoutEntry function
-  const createWorkoutEntry = (parsedData) => {
-    console.log('Creating workout entry from:', parsedData)
-    
-    return {
-      date: new Date().toLocaleDateString(),
-      exercise: parsedData.exercise || '',
-      weight: parsedData.weight ? `${parsedData.weight}` : '',
-      sets: parsedData.sets ? `${parsedData.sets}` : '',
-      reps: parsedData.reps ? `${parsedData.reps}` : '',
-      bodyweight: parsedData.bodyweight ? `${parsedData.bodyweight}` : '',
-      notes: parsedData.notes || ''
+    try {
+      // Prepare the update data
+      const updateData = {
+        [field]: field === 'sets' || field === 'reps' 
+          ? parseInt(newValue) || null
+          : field === 'bodyweight'
+            ? parseFloat(newValue) || null
+            : newValue
+      }
+
+      // Update in Supabase
+      const { error } = await supabase
+        .from('workout_history')
+        .update(updateData)
+        .eq('id', id)
+
+      if (error) throw error
+
+      toast.success('Workout updated successfully')
+    } catch (error) {
+      console.error('Error updating workout:', error)
+      toast.error('Failed to update workout')
+      
+      // Revert the optimistic update on error
+      fetchWorkoutHistory()
     }
   }
 
-  const handleDeleteWorkout = (id) => {
-    setWorkoutData(prevData => prevData.filter(workout => workout.id !== id))
-    toast.success('Workout removed successfully')
+  // Update createWorkoutEntry function
+  const createWorkoutEntry = async (parsedData) => {
+    console.log('Creating workout entry from:', parsedData)
+    
+    // Create entry object for both local state and Supabase
+    const workoutEntry = {
+      user_id: user.id,  // Add user_id from auth context
+      date: new Date().toISOString(),  // Store as ISO string for Supabase
+      exercise: parsedData.exercise || '',
+      weight: parsedData.weight ? `${parsedData.weight}` : '',
+      sets: parsedData.sets ? parseInt(parsedData.sets) : null,  // Convert to number for Supabase
+      reps: parsedData.reps ? parseInt(parsedData.reps) : null,  // Convert to number for Supabase
+      bodyweight: parsedData.bodyweight ? parseFloat(parsedData.bodyweight) : null,  // Convert to number for Supabase
+      notes: parsedData.notes || ''
+    }
+
+    try {
+      // Insert into Supabase
+      const { data, error } = await supabase
+        .from('workout_history')
+        .insert([workoutEntry])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Return formatted data for local state
+      return {
+        id: data.id,
+        date: new Date(data.date).toLocaleDateString(),
+        exercise: data.exercise,
+        weight: data.weight || '',
+        sets: data.sets?.toString() || '',
+        reps: data.reps?.toString() || '',
+        bodyweight: data.bodyweight?.toString() || '',
+        notes: data.notes || ''
+      }
+    } catch (error) {
+      console.error('Error creating workout:', error)
+      toast.error('Failed to save workout')
+      // Return formatted data for local state as fallback
+      return {
+        id: workoutData.length + 1,
+        date: new Date().toLocaleDateString(),
+        ...workoutEntry,
+        sets: workoutEntry.sets?.toString() || '',
+        reps: workoutEntry.reps?.toString() || '',
+        bodyweight: workoutEntry.bodyweight?.toString() || ''
+      }
+    }
+  }
+
+  const handleDeleteWorkout = async (id) => {
+    // Ask for confirmation
+    if (!window.confirm('Are you sure you want to delete this workout entry?')) {
+      return
+    }
+
+    try {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('workout_history')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      // If successful, update local state
+      setWorkoutData(prevData => prevData.filter(workout => workout.id !== id))
+      toast.success('Workout deleted successfully')
+    } catch (error) {
+      console.error('Error deleting workout:', error)
+      toast.error('Failed to delete workout')
+    }
   }
 
   return (
     <div className="bg-white/5 rounded-xl p-6 backdrop-blur-sm">
+      {error && (
+        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <h3 className="text-xl font-semibold text-white/90">AI Workout Tracking</h3>
@@ -856,95 +994,101 @@ const WorkoutLog = () => {
       </div>
       
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-800 border border-gray-800 rounded-lg">
-          <thead>
-            <tr className="bg-white/5">
-              <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                Date
-              </th>
-              <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                Exercise
-              </th>
-              <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                Weight
-              </th>
-              <th scope="col" className="px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                Sets
-              </th>
-              <th scope="col" className="px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                Reps
-              </th>
-              <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                Bodyweight
-              </th>
-              <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                Notes
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800">
-            {workoutData.map(workout => (
-              <tr key={workout.id} className="hover:bg-white/5 group">
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                  <EditableCell 
-                    value={workout.date} 
-                    onChange={(newValue) => handleCellChange(workout.id, 'date', newValue)} 
-                  />
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                  <EditableCell 
-                    value={workout.exercise} 
-                    onChange={(newValue) => handleCellChange(workout.id, 'exercise', newValue)} 
-                  />
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                  <EditableCell 
-                    value={workout.weight} 
-                    onChange={(newValue) => handleCellChange(workout.id, 'weight', newValue)} 
-                  />
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
-                  <EditableCell 
-                    value={workout.sets} 
-                    onChange={(newValue) => handleCellChange(workout.id, 'sets', newValue)} 
-                    type="number"
-                  />
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
-                  <EditableCell 
-                    value={workout.reps} 
-                    onChange={(newValue) => handleCellChange(workout.id, 'reps', newValue)} 
-                    type="number"
-                  />
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                  <EditableCell 
-                    value={workout.bodyweight} 
-                    onChange={(newValue) => handleCellChange(workout.id, 'bodyweight', newValue)} 
-                    type="number"
-                  />
-                </td>
-                <td className="px-3 py-4 text-sm text-gray-300 relative">
-                  <div className="flex items-center">
-                    <EditableCell 
-                      value={workout.notes} 
-                      onChange={(newValue) => handleCellChange(workout.id, 'notes', newValue)} 
-                    />
-                    <button
-                      onClick={() => handleDeleteWorkout(workout.id)}
-                      className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-[#e12c4c] transition-colors opacity-0 group-hover:opacity-100 absolute right-2"
-                      title="Delete workout"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/20"></div>
+          </div>
+        ) : (
+          <table className="min-w-full divide-y divide-gray-800 border border-gray-800 rounded-lg">
+            <thead>
+              <tr className="bg-white/5">
+                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                  Date
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                  Exercise
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                  Weight
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                  Sets
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                  Reps
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                  Bodyweight
+                </th>
+                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                  Notes
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-800">
+              {workoutData.map(workout => (
+                <tr key={workout.id} className="hover:bg-white/5 group">
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                    <EditableCell 
+                      value={workout.date} 
+                      onChange={(newValue) => handleCellChange(workout.id, 'date', newValue)} 
+                    />
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                    <EditableCell 
+                      value={workout.exercise} 
+                      onChange={(newValue) => handleCellChange(workout.id, 'exercise', newValue)} 
+                    />
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                    <EditableCell 
+                      value={workout.weight} 
+                      onChange={(newValue) => handleCellChange(workout.id, 'weight', newValue)} 
+                    />
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
+                    <EditableCell 
+                      value={workout.sets} 
+                      onChange={(newValue) => handleCellChange(workout.id, 'sets', newValue)} 
+                      type="number"
+                    />
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
+                    <EditableCell 
+                      value={workout.reps} 
+                      onChange={(newValue) => handleCellChange(workout.id, 'reps', newValue)} 
+                      type="number"
+                    />
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                    <EditableCell 
+                      value={workout.bodyweight} 
+                      onChange={(newValue) => handleCellChange(workout.id, 'bodyweight', newValue)} 
+                      type="number"
+                    />
+                  </td>
+                  <td className="px-3 py-4 text-sm text-gray-300 relative">
+                    <div className="flex items-center">
+                      <EditableCell 
+                        value={workout.notes} 
+                        onChange={(newValue) => handleCellChange(workout.id, 'notes', newValue)} 
+                      />
+                      <button
+                        onClick={() => handleDeleteWorkout(workout.id)}
+                        className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-[#e12c4c] transition-colors opacity-0 group-hover:opacity-100 absolute right-2"
+                        title="Delete workout"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
@@ -1102,7 +1246,7 @@ export default function MemberPortal() {
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold">Welcome back, {user?.user_metadata?.first_name || 'Member'}</h1>
             <div className="flex items-center gap-4">
-              <span className="px-4 py-1 rounded-full bg-[#e12c4c]/20 text-[#e12c4c] text-sm">
+              <span className="px-4 py-1 rounded-full bg-indigo-500/20 text-indigo-400 text-sm">
                 Premium Member
               </span>
               <div className="relative">
@@ -1142,6 +1286,8 @@ export default function MemberPortal() {
           {renderContent()}
         </div>
       </div>
+
+      <AIAssistant />
     </div>
   )
 } 
