@@ -11,6 +11,7 @@ import { ChatOpenAI } from "@langchain/openai"
 import { AgentExecutor, initializeAgentExecutorWithOptions } from "langchain/agents"
 import { BufferMemory } from "langchain/memory"
 
+
 // Initialize LangSmith client
 const client = new Client({
   apiUrl: "https://api.smith.langchain.com",

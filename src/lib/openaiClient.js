@@ -9,16 +9,31 @@ const client = new Client({
   apiUrl: "https://api.smith.langchain.com",
   apiKey: import.meta.env.VITE_LANGCHAIN_API_KEY,
 });
-
 // Initialize LangChain's ChatOpenAI with tracing
 const langChainModel = new ChatOpenAI({
-  modelName: "gpt-3.5-turbo",
+  modelName: "gpt-4",
   temperature: 0,
   openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  streaming: true,
   configuration: {
     baseURL: "https://api.openai.com/v1"
   }
+});
+// Set tracing environment variables explicitly
+if (typeof window !== 'undefined') {
+  window.process = {
+    ...window.process,
+    env: {
+      LANGCHAIN_TRACING_V2: "true",
+      LANGCHAIN_API_KEY: import.meta.env.VITE_LANGCHAIN_API_KEY,
+      LANGCHAIN_PROJECT: import.meta.env.VITE_LANGCHAIN_PROJECT
+    }
+  };
+}
+console.log('🔧 LangChain Model Configuration:', {
+  hasApiKey: !!langChainModel.openAIApiKey,
+  config: langChainModel.configuration,
+  modelName: langChainModel.modelName,
+  tracingConfig: window?.process?.env || 'Not Set'
 });
 
 // Create a prompt template for your ticket responses
