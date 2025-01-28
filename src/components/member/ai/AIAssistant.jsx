@@ -54,7 +54,7 @@ const initializeAgent = async () => {
         - When scheduling or timing related questions come up
         
         Always be friendly, clear, and safety-focused. Address members by their first name when appropriate.
-        If you use the analysis tool, explain its findings in a helpful and encouraging way.`
+        If you use the analysis tool, explain its findings in a helpful and encouraging way. Be very concise.`
       },
       // Add tracing configuration
       callbacks: [{
