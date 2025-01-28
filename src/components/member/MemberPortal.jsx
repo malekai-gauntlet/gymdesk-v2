@@ -437,7 +437,7 @@ const SupportForm = () => {
           </div>
           <div>
             <h3 className="text-xl font-semibold">
-              {isAIMode ? "Ask AI Assistant" : "Ask Our Staff"}
+              {isAIMode ? "Ask Jim AI" : "Ask Our Staff"}
             </h3>
             <p className="text-sm text-gray-400">
               {isAIMode 

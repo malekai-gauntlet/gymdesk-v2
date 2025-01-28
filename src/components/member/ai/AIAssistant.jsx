@@ -1,14 +1,77 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { toast } from 'react-hot-toast'
-import { OpenAI } from 'openai'
 import { findRelevantEntries } from '../../../lib/knowledgeBaseUtils'
+import { muscleBalanceAnalysis } from '../../../lib/workoutAnalysis'
+import { dateTimeTool } from '../../../lib/utilityTools'
+import { Client } from "langsmith"
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
-})
+// LangChain imports
+import { ChatOpenAI } from "@langchain/openai"
+import { AgentExecutor, initializeAgentExecutorWithOptions } from "langchain/agents"
+import { BufferMemory } from "langchain/memory"
+
+// Initialize LangSmith client
+const client = new Client({
+  apiUrl: "https://api.smith.langchain.com",
+  apiKey: import.meta.env.VITE_LANGCHAIN_API_KEY,
+});
+
+// Initialize LangChain Chat Model
+const chatModel = new ChatOpenAI({
+  modelName: "gpt-4",
+  temperature: 0.7,
+  openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
+});
+
+// Initialize the agent executor
+const initializeAgent = async () => {
+  const executor = await initializeAgentExecutorWithOptions(
+    [muscleBalanceAnalysis, dateTimeTool],
+    chatModel,
+    {
+      agentType: "openai-functions",
+      memory: new BufferMemory({
+        returnMessages: true,
+        memoryKey: "chat_history",
+        outputKey: "output",
+      }),
+      agentArgs: {
+        prefix: `You are an intelligent gym assistant named Jim that helps members with workout advice and analysis. 
+        You have access to a workout analysis tool that can detect muscle imbalances and provide recommendations.
+        You can also provide current date and time information when asked.
+        
+        When to use the workout analysis tool:
+        - When members ask about their workout balance or progress
+        - When checking for potential overtraining
+        - When evaluating muscle group coverage
+        - When members mention pain or discomfort that might be related to imbalanced training
+        
+        When to use the datetime tool:
+        - When members ask about current time or date
+        - When they need to know what day of the week it is
+        - When scheduling or timing related questions come up
+        
+        Always be friendly, clear, and safety-focused. Address members by their first name when appropriate.
+        If you use the analysis tool, explain its findings in a helpful and encouraging way.`
+      },
+      // Add tracing configuration
+      callbacks: [{
+        handleLLMStart: () => console.log("🔄 Starting Jim AI interaction..."),
+        handleLLMEnd: () => console.log("✅ Jim AI interaction completed"),
+        handleToolStart: (tool) => console.log(`🛠️ Starting tool: ${tool.name}`),
+        handleToolEnd: (output) => console.log("🛠️ Tool execution completed"),
+      }],
+      tags: ["jim-ai", "gym-assistant"],
+    }
+  );
+  return executor;
+};
+
+let agentExecutor = null;
+initializeAgent().then(executor => {
+  agentExecutor = executor;
+});
 
 const AIAssistant = () => {
   const { user } = useAuth()
@@ -41,26 +104,27 @@ const AIAssistant = () => {
       const userContext = `\nMember Context:
 - Name: ${user?.user_metadata?.first_name} ${user?.user_metadata?.last_name}
 - Membership Status: Member
-- Email: ${user?.email}`
+- Email: ${user?.email}
+- User ID: ${user?.id}`
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are a helpful gym assistant that specializes in workout advice, injury prevention, and answering questions about the gym's services. Keep responses clear, friendly, and focused on fitness goals and safety. Address the member by their first name when appropriate.${userContext}${knowledgeBaseContext}`
-          },
-          ...messages,
-          userMessage
-        ],
-        temperature: 0.7,
-      })
-
-      const aiMessage = { 
-        role: 'assistant', 
-        content: completion.choices[0].message.content 
+      if (!agentExecutor) {
+        throw new Error('Agent executor not initialized');
       }
-      setMessages(prev => [...prev, aiMessage])
+
+      // Execute the agent with the input
+      const result = await agentExecutor.invoke({
+        input: `${inputValue}\n\n${userContext}\n\n${knowledgeBaseContext}`
+      });
+      
+      console.log('Agent result:', result);
+
+      const aiMessage = {
+        role: 'assistant',
+        content: result.output
+      };
+      
+      console.log('AI Message formatted:', aiMessage);
+      setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error getting AI response:', error)
       toast.error('Sorry, I had trouble responding. Please try again.')
@@ -80,7 +144,7 @@ const AIAssistant = () => {
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">AI Assistant</h3>
+            <h3 className="text-lg font-semibold text-white">Jim AI</h3>
             <p className="text-sm text-gray-400">Your personal fitness guide</p>
           </div>
         </div>
