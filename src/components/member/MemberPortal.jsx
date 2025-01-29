@@ -178,7 +178,15 @@ const EditableCell = ({ value, onChange, type = "text" }) => {
     return (
       <input
         type={type}
-        className="w-full bg-white/10 text-white border-0 p-1 focus:ring-1 focus:ring-[#e12c4c] rounded"
+        className="w-full bg-white/10 text-white border-0 focus:ring-1 focus:ring-[#e12c4c] rounded focus:outline-none"
+        style={{ 
+          minWidth: '100%', 
+          maxWidth: '100%', 
+          boxSizing: 'border-box',
+          height: '24px',
+          lineHeight: '24px',
+          padding: '0 4px'
+        }}
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleBlur}
@@ -190,8 +198,13 @@ const EditableCell = ({ value, onChange, type = "text" }) => {
 
   return (
     <div 
-      className="cursor-pointer group relative min-h-[1.5rem] min-w-[1rem]"
+      className="cursor-pointer group relative"
       onClick={handleClick}
+      style={{ 
+        height: '24px',
+        lineHeight: '24px',
+        padding: '0 4px'
+      }}
     >
       {value}
       <div className="absolute inset-0 border border-[#e12c4c]/0 group-hover:border-[#e12c4c]/20 rounded pointer-events-none transition-colors" />
@@ -572,38 +585,7 @@ const SupportForm = () => {
 
 const WorkoutLog = () => {
   const { user } = useAuth()
-  const [workoutData, setWorkoutData] = useState([
-    {
-      id: 1,
-      date: '12/15/2024',
-      exercise: 'Lat Pulldown',
-      weight: '100 & 200',
-      sets: '2',
-      reps: '10',
-      bodyweight: '195.8',
-      notes: 'Failed on the first set of the second set. Had really good contraction, this was the first time.'
-    },
-    {
-      id: 2,
-      date: '12/17/2024',
-      exercise: 'Chest Press',
-      weight: '45 & 25',
-      sets: '2',
-      reps: '10',
-      bodyweight: '191.8',
-      notes: 'N/A'
-    },
-    {
-      id: 3,
-      date: '12/19/2024',
-      exercise: 'Bench Press',
-      weight: '185',
-      sets: '3',
-      reps: '8',
-      bodyweight: '192.3',
-      notes: 'Feeling strong today, might increase weight next session'
-    }
-  ])
+  const [workoutData, setWorkoutData] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -1018,72 +1000,62 @@ const WorkoutLog = () => {
           <table className="min-w-full divide-y divide-gray-800 border border-gray-800 rounded-lg">
             <thead>
               <tr className="bg-white/5">
-                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                <th scope="col" className="w-32 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
                   Date
                 </th>
-                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                <th scope="col" className="w-48 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
                   Exercise
                 </th>
-                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                <th scope="col" className="w-24 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
                   Weight
                 </th>
-                <th scope="col" className="px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                <th scope="col" className="w-20 px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
                   Sets
                 </th>
-                <th scope="col" className="px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                <th scope="col" className="w-20 px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
                   Reps
                 </th>
-                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                  Bodyweight
-                </th>
-                <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                <th scope="col" className="w-full px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
                   Notes
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {workoutData.map(workout => (
-                <tr key={workout.id} className="hover:bg-white/5 group">
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                <tr key={workout.id} className="hover:bg-white/5">
+                  <td className="w-32 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
                     <EditableCell 
                       value={workout.date} 
                       onChange={(newValue) => handleCellChange(workout.id, 'date', newValue)} 
                     />
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                  <td className="w-48 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
                     <EditableCell 
                       value={workout.exercise} 
                       onChange={(newValue) => handleCellChange(workout.id, 'exercise', newValue)} 
                     />
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                  <td className="w-24 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
                     <EditableCell 
                       value={workout.weight} 
                       onChange={(newValue) => handleCellChange(workout.id, 'weight', newValue)} 
                     />
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
+                  <td className="w-20 px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
                     <EditableCell 
                       value={workout.sets} 
                       onChange={(newValue) => handleCellChange(workout.id, 'sets', newValue)} 
                       type="number"
                     />
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
+                  <td className="w-20 px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
                     <EditableCell 
                       value={workout.reps} 
                       onChange={(newValue) => handleCellChange(workout.id, 'reps', newValue)} 
                       type="number"
                     />
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                    <EditableCell 
-                      value={workout.bodyweight} 
-                      onChange={(newValue) => handleCellChange(workout.id, 'bodyweight', newValue)} 
-                      type="number"
-                    />
-                  </td>
-                  <td className="px-3 py-4 text-sm text-gray-300 relative">
+                  <td className="w-full px-3 py-4 text-sm text-gray-300 relative">
                     <div className="flex items-center">
                       <EditableCell 
                         value={workout.notes} 
