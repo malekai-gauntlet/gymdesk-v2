@@ -102,40 +102,28 @@ const initializeAgent = async () => {
         If you use the analysis tool, explain its findings in a helpful and encouraging way. Be very concise.`
       },
       callbacks: [{
-        handleLLMStart: () => {
-          console.log("🔄 Starting Jim AI interaction...");
-          addThinkingStepCallback?.("Analyzing your request and deciding how to help...");
+        handleStart: () => {
+          console.log("Agent starting");
+          addThinkingStepCallback?.("Analyzing your message...");
         },
-        handleLLMEnd: () => {
-          console.log("✅ Jim AI interaction completed");
-          addThinkingStepCallback?.("Formulating my response...");
-        },
-        handleToolStart: (tool) => {
-          console.log(`🛠️ Starting tool: ${tool.name}`);
-          if (tool.name === "searchKnowledgeBase") {
-            addThinkingStepCallback?.("Searching our gym's knowledge base...");
+        handleAgentAction: (action) => {
+          console.log("Agent action:", action);
+          addThinkingStepCallback?.("Identifying the most appropriate tool...");
+          if (action.tool === "searchKnowledgeBase") {
+            addThinkingStepCallback?.("Checking our gym's knowledge base for accurate information...");
+          } else if (action.tool === "muscleBalanceAnalysis") {
+            addThinkingStepCallback?.("Analyzing your workout patterns and potential injury risks...");
           } else {
-            addThinkingStepCallback?.(`Using ${tool.name} to help with your request...`);
+            addThinkingStepCallback?.(`I'll use my ${action.tool} tool to help...`);
           }
         },
         handleToolEnd: (output) => {
           console.log("🛠️ Tool execution completed", { output });
-          addThinkingStepCallback?.("Processing the results...");
-        },
-        handleAgentAction: (action) => {
-          console.log("Agent action:", action);
-          if (action.tool === "searchKnowledgeBase") {
-            addThinkingStepCallback?.("Checking our gym's knowledge base for accurate information...");
-          } else {
-            addThinkingStepCallback?.(`I've decided to use my ${action.tool} tool to help you better...`);
-          }
-          // Add the finalizing step 2 seconds after the tool selection step
-          setTimeout(() => {
-            addThinkingStepCallback?.("Finalizing my response with all the information gathered...");
-          }, 3000);
+          addThinkingStepCallback?.("Processing the results from our analysis...");
         },
         handleAgentEnd: () => {
           console.log("Agent ending");
+          addThinkingStepCallback?.("Finalizing your personalized response...");
         }
       }],
       tags: ["jim-ai", "gym-assistant"],
@@ -170,9 +158,9 @@ const AIAssistant = () => {
 
   // Modify the addThinkingStep function
   const addThinkingStep = (stepText) => {
-    stepCounterRef.current += 1;  // Increment counter
+    stepCounterRef.current += 1;
     const newStep = {
-      id: `${Date.now()}-${stepCounterRef.current}`,  // Combine timestamp with sequence number
+      id: `${Date.now()}-${stepCounterRef.current}`,
       text: stepText,
       status: THINKING_STEP_STATUS.PENDING
     };
@@ -180,7 +168,11 @@ const AIAssistant = () => {
     setThinkingSteps(prev => [...prev, newStep]);
     setActiveStepIndex(prev => prev + 1);
     
-    // Log for debugging
+    // Add immediate scroll after adding a thinking step
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100); // Small delay to ensure DOM has updated
+    
     console.log('Added thinking step:', newStep);
   };
 
@@ -193,7 +185,7 @@ const AIAssistant = () => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isTyping])
+  }, [messages, isTyping, thinkingSteps])
 
   // Register the callback when component mounts
   useEffect(() => {
