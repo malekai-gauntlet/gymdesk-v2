@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient'
+import { DynamicStructuredTool } from 'langchain/tools'
+import { z } from "zod"
 
 /**
  * Find relevant knowledge base entries based on semantic similarity to the query
@@ -52,4 +54,43 @@ export async function findRelevantEntries(query, limit = 3, similarityThreshold 
         console.error('❌ Error in findRelevantEntries:', error);
         return [];
     }
-} 
+}
+
+export const knowledgeBaseTool = new DynamicStructuredTool({
+    name: "searchKnowledgeBase",
+    description: "Search the gym's knowledge base for facility-specific information, policies, procedures, and guidelines. Use this when you need accurate, facility-specific information about rules, services, or policies.",
+    schema: z.object({
+        query: z.string().describe("The search query to find relevant information"),
+        limit: z.number().optional().describe("Maximum number of entries to return (default: 3)"),
+        similarityThreshold: z.number().optional().describe("Minimum similarity score to include (default: 0.5)")
+    }),
+    func: async ({ query, limit = 3, similarityThreshold = 0.5 }) => {
+        try {
+            const entries = await findRelevantEntries(query, limit, similarityThreshold);
+            
+            if (entries.length === 0) {
+                return JSON.stringify({
+                    found: false,
+                    message: "No relevant information found in the knowledge base."
+                });
+            }
+
+            const formattedEntries = entries.map(entry => ({
+                title: entry.title,
+                content: entry.content,
+                similarity: entry.similarity
+            }));
+
+            return JSON.stringify({
+                found: true,
+                entries: formattedEntries
+            });
+        } catch (error) {
+            console.error('Knowledge base tool error:', error);
+            return JSON.stringify({
+                found: false,
+                error: error.message || 'Failed to search knowledge base'
+            });
+        }
+    }
+}); 
