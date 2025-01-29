@@ -6,6 +6,7 @@ import { muscleBalanceAnalysis } from '../../../lib/workoutAnalysis'
 import { dateTimeTool } from '../../../lib/utilityTools'
 import { workoutEntryTool } from '../../../lib/workoutEntryTool'
 import { Client } from "langsmith"
+import { supabase } from '../../../lib/supabaseClient'
 
 // LangChain imports
 import { ChatOpenAI } from "@langchain/openai"
@@ -60,8 +61,17 @@ const initializeAgent = async () => {
         - When they want to log their training session
         - When they describe exercises they performed
         
+        Injury Prevention Guidelines:
+        - Provide clear, actionable advice about form, recovery, and prevention
+        - Tag any injury prevention advice you give with [INJURY_PREVENTION] at the start of that part of your response
+        - Focus on preventive measures rather than treatment
+        - If you notice patterns in their workout history that might lead to injury, proactively warn them
+        
         Always be friendly, clear, and safety-focused. Address members by their first name when appropriate.
-        If you use the analysis tool, explain its findings in a helpful and encouraging way. Be very concise.`
+        If you use the analysis tool, explain its findings in a helpful and encouraging way. Be very concise.
+        
+        Remember: Any advice you give that's related to injury prevention should be tagged with [INJURY_PREVENTION] 
+        so it can be saved and displayed in their injury prevention corner.`
       },
       callbacks: [{
         handleLLMStart: () => console.log("🔄 Starting Jim AI interaction..."),
@@ -86,6 +96,43 @@ const AIAssistant = () => {
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   
+  // Function to store injury prevention recommendations
+  const storeInjuryPreventionRecommendation = async (recommendation) => {
+    try {
+      const { data: userData, error: fetchError } = await supabase
+        .from('users')
+        .select('injury_prevention_recommendations')
+        .eq('id', user.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Get existing recommendations or initialize empty array
+      const existingRecommendations = userData?.injury_prevention_recommendations || [];
+
+      // Add new recommendation with timestamp
+      const newRecommendation = {
+        recommendation: recommendation.replace('[INJURY_PREVENTION]', '').trim(),
+        created_at: new Date().toISOString(),
+        source: 'jim_ai'
+      };
+
+      // Keep only the 3 most recent recommendations
+      const updatedRecommendations = [newRecommendation, ...existingRecommendations].slice(0, 3);
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ injury_prevention_recommendations: updatedRecommendations })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+      
+      console.log('Stored new injury prevention recommendation:', newRecommendation);
+    } catch (error) {
+      console.error('Error storing injury prevention recommendation:', error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!inputValue.trim()) return
@@ -124,6 +171,16 @@ const AIAssistant = () => {
       });
       
       console.log('Agent result:', result);
+
+      // Check for injury prevention recommendations in the response
+      const injuryPreventionRegex = /\[INJURY_PREVENTION\](.*?)(?=\[INJURY_PREVENTION\]|$)/gs;
+      const recommendations = result.output.match(injuryPreventionRegex);
+      
+      if (recommendations) {
+        for (const recommendation of recommendations) {
+          await storeInjuryPreventionRecommendation(recommendation);
+        }
+      }
 
       const aiMessage = {
         role: 'assistant',

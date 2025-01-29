@@ -588,6 +588,56 @@ const WorkoutLog = () => {
   const [workoutData, setWorkoutData] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [recommendations, setRecommendations] = useState([])
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(true)
+  const [recommendationsError, setRecommendationsError] = useState(null)
+  
+  // Analytics state
+  const [analyticsData, setAnalyticsData] = useState(null)
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(true)
+  const [analyticsError, setAnalyticsError] = useState(null)
+  
+  // Calendar state
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState(null)
+  
+  // Calendar helper functions
+  const getWeekDays = (date) => {
+    const curr = new Date(date)
+    const firstDay = new Date(curr.setDate(curr.getDate() - curr.getDay()))
+    const days = []
+    
+    for (let i = 0; i < 7; i++) {
+      days.push(new Date(new Date(firstDay).setDate(firstDay.getDate() + i)))
+    }
+    return days
+  }
+  
+  const hasWorkoutsOnDate = (date) => {
+    if (!date) return false
+    return workoutData.some(workout => 
+      new Date(workout.date).toDateString() === date.toDateString()
+    )
+  }
+  
+  const getFilteredWorkouts = () => {
+    if (!selectedDate) return workoutData
+    return workoutData.filter(workout => 
+      new Date(workout.date).toDateString() === selectedDate.toDateString()
+    )
+  }
+  
+  const handleDateClick = (date) => {
+    setSelectedDate(date?.toDateString() === selectedDate?.toDateString() ? null : date)
+  }
+  
+  const handlePrevWeek = () => {
+    setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 7)))
+  }
+  
+  const handleNextWeek = () => {
+    setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 7)))
+  }
 
   // Fetch workout history from Supabase
   const fetchWorkoutHistory = async () => {
@@ -622,14 +672,58 @@ const WorkoutLog = () => {
     }
   }
 
-  // Add useEffect to fetch data on component mount
+  // Fetch analytics data
+  const fetchAnalytics = async () => {
+    setIsLoadingAnalytics(true)
+    try {
+      const { data, error } = await supabase.rpc('analyze_muscle_balance', {
+        p_user_id: user.id,
+        p_days: 30
+      })
+      
+      if (error) throw error
+      
+      setAnalyticsData(data)
+    } catch (error) {
+      console.error('Error fetching analytics:', error)
+      setAnalyticsError(error.message)
+    } finally {
+      setIsLoadingAnalytics(false)
+    }
+  }
+
+  // Fetch recommendations from user profile
+  const fetchRecommendations = async () => {
+    try {
+      setIsLoadingRecommendations(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('injury_prevention_recommendations')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      setRecommendations(data?.injury_prevention_recommendations || []);
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+      setRecommendationsError(error.message);
+    } finally {
+      setIsLoadingRecommendations(false);
+    }
+  };
+
+  // Add recommendations fetch to useEffect
   useEffect(() => {
-    fetchWorkoutHistory()
+    fetchWorkoutHistory();
+    fetchRecommendations();
 
     // Listen for new workouts added by Jim AI
     const handleWorkoutAdded = (event) => {
       const newWorkout = event.detail;
       setWorkoutData(prevData => [newWorkout, ...prevData]);
+      // Refresh recommendations when new workout is added
+      fetchRecommendations();
       toast.success(`Successfully logged ${newWorkout.exercise || 'workout'}!`);
     };
 
@@ -640,7 +734,7 @@ const WorkoutLog = () => {
     return () => {
       workoutEventEmitter.removeEventListener(WORKOUT_ADDED_EVENT, handleWorkoutAdded);
     };
-  }, [])
+  }, []);
 
   // Initialize speech recognition and states
   const [recognition, setRecognition] = useState(null)
@@ -920,165 +1014,300 @@ const WorkoutLog = () => {
   }
 
   return (
-    <div className="bg-white/5 rounded-xl p-6 backdrop-blur-sm">
-      {error && (
-        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-          <p className="text-sm text-red-400">{error}</p>
+    <>
+      {/* AI Workout Tracking Box */}
+      <div className="bg-white/5 rounded-xl p-6 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-semibold text-white/90">AI Workout Tracking</h3>
+            <div className="relative group">
+              <button
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                title="How it works"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+              <div className="absolute left-0 top-full mt-2 w-80 p-4 rounded-lg bg-gray-900/95 backdrop-blur-sm shadow-xl border border-gray-800 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+                <h4 className="font-medium text-white mb-2">How to Log Your Workout</h4>
+                <p className="text-sm text-gray-300 mb-3">
+                  Simply click the microphone icon and speak your workout details naturally. The AI will automatically parse and log your workout in the table below.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            {currentTranscript && (
+              <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-[#e12c4c]/20">
+                <div className="w-2 h-2 rounded-full bg-[#e12c4c] animate-pulse" />
+                <p className="text-sm text-gray-300">{currentTranscript}</p>
+              </div>
+            )}
+            {isListening && !currentTranscript && (
+              <span className="text-sm text-gray-400">
+                Recording...
+              </span>
+            )}
+            {isProcessing && (
+              <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-[#e12c4c]/20">
+                <svg className="animate-spin h-4 w-4 text-[#e12c4c]" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span className="text-sm text-gray-300">Processing workout...</span>
+              </div>
+            )}
+            <button
+              onClick={handleMicrophoneClick}
+              disabled={isProcessing}
+              className={`p-2.5 rounded-full transition-colors text-gray-400 hover:text-white group relative ${
+                isListening ? 'bg-[#e12c4c]/20 text-[#e12c4c]' : 'bg-white/5 hover:bg-white/10'
+              } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isListening ? "Stop recording" : "Record workout"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+              <div className={`absolute inset-0 border rounded-full pointer-events-none transition-colors ${
+                isListening ? 'border-[#e12c4c] animate-pulse' : 'border-[#e12c4c]/0 group-hover:border-[#e12c4c]/20'
+              }`} />
+            </button>
+          </div>
         </div>
-      )}
-      
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xl font-semibold text-white/90">AI Workout Tracking</h3>
+        
+        {/* Calendar Filter */}
+        <div className="mb-6 bg-white/5 rounded-lg p-4 border border-gray-800">
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={handlePrevWeek}
+              className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h3 className="text-lg font-medium text-white">
+              {(() => {
+                const weekDays = getWeekDays(currentDate)
+                const firstDay = weekDays[0]
+                const lastDay = weekDays[6]
+                const sameMonth = firstDay.getMonth() === lastDay.getMonth()
+                const sameYear = firstDay.getFullYear() === lastDay.getFullYear()
+                
+                if (sameMonth && sameYear) {
+                  return `${firstDay.toLocaleString('default', { month: 'long' })} ${firstDay.getDate()}-${lastDay.getDate()}, ${firstDay.getFullYear()}`
+                } else if (sameYear) {
+                  return `${firstDay.toLocaleString('default', { month: 'short' })} ${firstDay.getDate()} - ${lastDay.toLocaleString('default', { month: 'short' })} ${lastDay.getDate()}, ${firstDay.getFullYear()}`
+                } else {
+                  return `${firstDay.toLocaleString('default', { month: 'short' })} ${firstDay.getDate()}, ${firstDay.getFullYear()} - ${lastDay.toLocaleString('default', { month: 'short' })} ${lastDay.getDate()}, ${lastDay.getFullYear()}`
+                }
+              })()}
+            </h3>
+            <button
+              onClick={handleNextWeek}
+              className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-7 gap-1">
+            {/* Day headers */}
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-center text-xs font-medium text-gray-400 py-1">
+                {day}
+              </div>
+            ))}
+            
+            {/* Calendar days */}
+            {getWeekDays(currentDate).map((date, index) => (
+              <button
+                key={index}
+                onClick={() => date && handleDateClick(date)}
+                disabled={!date}
+                className={`
+                  h-8 flex items-center justify-center rounded-lg text-sm font-medium
+                  ${!date ? 'invisible' : 'hover:bg-white/10'}
+                  ${date && hasWorkoutsOnDate(date) ? 'text-[#e12c4c]' : 'text-gray-400'}
+                  ${date && selectedDate?.toDateString() === date.toDateString() ? 'bg-white/10 text-white' : ''}
+                  transition-colors
+                `}
+              >
+                {date?.getDate()}
+              </button>
+            ))}
+          </div>
+          
+          {selectedDate && (
+            <div className="mt-4 flex items-center justify-between">
+              <span className="text-sm text-gray-400">
+                Showing workouts for {selectedDate.toLocaleDateString()}
+              </span>
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="text-sm text-[#e12c4c] hover:text-[#e12c4c]/80 transition-colors"
+              >
+                Clear filter
+              </button>
+            </div>
+          )}
+        </div>
+        
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/20"></div>
+            </div>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-800 border border-gray-800 rounded-lg">
+              <thead>
+                <tr className="bg-white/5">
+                  <th scope="col" className="w-32 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                    Date
+                  </th>
+                  <th scope="col" className="w-48 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                    Exercise
+                  </th>
+                  <th scope="col" className="w-24 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                    Weight
+                  </th>
+                  <th scope="col" className="w-20 px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                    Sets
+                  </th>
+                  <th scope="col" className="w-20 px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
+                    Reps
+                  </th>
+                  <th scope="col" className="w-full px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                    Notes
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {getFilteredWorkouts().map(workout => (
+                  <tr key={workout.id} className="hover:bg-white/5">
+                    <td className="w-32 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                      <EditableCell 
+                        value={workout.date} 
+                        onChange={(newValue) => handleCellChange(workout.id, 'date', newValue)} 
+                      />
+                    </td>
+                    <td className="w-48 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                      <EditableCell 
+                        value={workout.exercise} 
+                        onChange={(newValue) => handleCellChange(workout.id, 'exercise', newValue)} 
+                      />
+                    </td>
+                    <td className="w-24 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
+                      <EditableCell 
+                        value={workout.weight} 
+                        onChange={(newValue) => handleCellChange(workout.id, 'weight', newValue)} 
+                      />
+                    </td>
+                    <td className="w-20 px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
+                      <EditableCell 
+                        value={workout.sets} 
+                        onChange={(newValue) => handleCellChange(workout.id, 'sets', newValue)} 
+                        type="number"
+                      />
+                    </td>
+                    <td className="w-20 px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
+                      <EditableCell 
+                        value={workout.reps} 
+                        onChange={(newValue) => handleCellChange(workout.id, 'reps', newValue)} 
+                        type="number"
+                      />
+                    </td>
+                    <td className="w-full px-3 py-4 text-sm text-gray-300 relative">
+                      <div className="flex items-center">
+                        <EditableCell 
+                          value={workout.notes} 
+                          onChange={(newValue) => handleCellChange(workout.id, 'notes', newValue)} 
+                        />
+                        <button
+                          onClick={() => handleDeleteWorkout(workout.id)}
+                          className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-[#e12c4c] transition-colors opacity-0 group-hover:opacity-100 absolute right-2"
+                          title="Delete workout"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Injury Prevention Corner */}
+      <div className="mt-8 bg-white/5 rounded-xl p-6 backdrop-blur-sm">
+        <div className="flex items-center gap-2 mb-6">
+          <h3 className="text-xl font-semibold text-white/90">Injury Prevention Corner</h3>
           <div className="relative group">
             <button
               className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
-              title="How it works"
+              title="About Injury Prevention"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
             <div className="absolute left-0 top-full mt-2 w-80 p-4 rounded-lg bg-gray-900/95 backdrop-blur-sm shadow-xl border border-gray-800 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
-              <h4 className="font-medium text-white mb-2">How to Log Your Workout</h4>
-              <p className="text-sm text-gray-300 mb-3">
-                Simply click the microphone icon and speak your workout details naturally. The AI will automatically parse and log your workout in the table below.
+              <h4 className="font-medium text-white mb-2">About Injury Prevention</h4>
+              <p className="text-sm text-gray-300">
+                Get personalized recommendations to help prevent injuries based on your workout patterns and recovery status.
               </p>
-              <div className="text-sm text-gray-400">
-                <p className="mb-2">Example phrases:</p>
-                <p className="italic mb-1">"Today I did bicep curls, three sets of ten, and I was able to do the third set very well."</p>
-                <p className="italic">"Just finished bench press at 185 pounds, did 4 sets of 8 reps. Feeling strong today."</p>
-              </div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          {currentTranscript && (
-            <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-[#e12c4c]/20">
-              <div className="w-2 h-2 rounded-full bg-[#e12c4c] animate-pulse" />
-              <p className="text-sm text-gray-300">{currentTranscript}</p>
+
+        <div className="bg-white/5 rounded-lg p-6 border border-gray-800">
+          <h4 className="text-lg font-medium text-white mb-4">Recommendations</h4>
+          {isLoadingRecommendations ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/20"></div>
             </div>
-          )}
-          {isListening && !currentTranscript && (
-            <span className="text-sm text-gray-400">
-              Recording...
-            </span>
-          )}
-          {isProcessing && (
-            <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-[#e12c4c]/20">
-              <svg className="animate-spin h-4 w-4 text-[#e12c4c]" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <span className="text-sm text-gray-300">Processing workout...</span>
+          ) : recommendationsError ? (
+            <div className="text-center text-sm text-gray-400">
+              Unable to load recommendations. Please try again later.
             </div>
-          )}
-          <button
-            onClick={handleMicrophoneClick}
-            disabled={isProcessing}
-            className={`p-2.5 rounded-full transition-colors text-gray-400 hover:text-white group relative ${
-              isListening ? 'bg-[#e12c4c]/20 text-[#e12c4c]' : 'bg-white/5 hover:bg-white/10'
-            } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={isListening ? "Stop recording" : "Record workout"}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
-            <div className={`absolute inset-0 border rounded-full pointer-events-none transition-colors ${
-              isListening ? 'border-[#e12c4c] animate-pulse' : 'border-[#e12c4c]/0 group-hover:border-[#e12c4c]/20'
-            }`} />
-          </button>
-        </div>
-      </div>
-      
-      <div className="overflow-x-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/20"></div>
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-800 border border-gray-800 rounded-lg">
-            <thead>
-              <tr className="bg-white/5">
-                <th scope="col" className="w-32 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                  Date
-                </th>
-                <th scope="col" className="w-48 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                  Exercise
-                </th>
-                <th scope="col" className="w-24 px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                  Weight
-                </th>
-                <th scope="col" className="w-20 px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                  Sets
-                </th>
-                <th scope="col" className="w-20 px-3 py-3.5 text-center text-xs font-semibold text-gray-300 uppercase tracking-wider border-r border-gray-800">
-                  Reps
-                </th>
-                <th scope="col" className="w-full px-3 py-3.5 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                  Notes
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {workoutData.map(workout => (
-                <tr key={workout.id} className="hover:bg-white/5">
-                  <td className="w-32 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                    <EditableCell 
-                      value={workout.date} 
-                      onChange={(newValue) => handleCellChange(workout.id, 'date', newValue)} 
-                    />
-                  </td>
-                  <td className="w-48 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                    <EditableCell 
-                      value={workout.exercise} 
-                      onChange={(newValue) => handleCellChange(workout.id, 'exercise', newValue)} 
-                    />
-                  </td>
-                  <td className="w-24 px-3 py-4 whitespace-nowrap text-sm text-gray-300 border-r border-gray-800">
-                    <EditableCell 
-                      value={workout.weight} 
-                      onChange={(newValue) => handleCellChange(workout.id, 'weight', newValue)} 
-                    />
-                  </td>
-                  <td className="w-20 px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
-                    <EditableCell 
-                      value={workout.sets} 
-                      onChange={(newValue) => handleCellChange(workout.id, 'sets', newValue)} 
-                      type="number"
-                    />
-                  </td>
-                  <td className="w-20 px-3 py-4 whitespace-nowrap text-sm text-gray-300 text-center border-r border-gray-800">
-                    <EditableCell 
-                      value={workout.reps} 
-                      onChange={(newValue) => handleCellChange(workout.id, 'reps', newValue)} 
-                      type="number"
-                    />
-                  </td>
-                  <td className="w-full px-3 py-4 text-sm text-gray-300 relative">
-                    <div className="flex items-center">
-                      <EditableCell 
-                        value={workout.notes} 
-                        onChange={(newValue) => handleCellChange(workout.id, 'notes', newValue)} 
-                      />
-                      <button
-                        onClick={() => handleDeleteWorkout(workout.id)}
-                        className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-[#e12c4c] transition-colors opacity-0 group-hover:opacity-100 absolute right-2"
-                        title="Delete workout"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+          ) : recommendations?.length > 0 ? (
+            <div className="space-y-4">
+              {recommendations.map((rec, index) => (
+                <div 
+                  key={index} 
+                  className="p-4 bg-white/5 rounded-lg border border-gray-800/50 hover:border-gray-800 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                      <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h14M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
                     </div>
-                  </td>
-                </tr>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-300">{rec.recommendation}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(rec.created_at).toLocaleDateString()} at {new Date(rec.created_at).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+              Start logging your workouts to get personalized injury prevention recommendations
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
