@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast'
 import { findRelevantEntries } from '../../../lib/knowledgeBaseUtils'
 import { muscleBalanceAnalysis } from '../../../lib/workoutAnalysis'
 import { dateTimeTool } from '../../../lib/utilityTools'
+import { workoutEntryTool } from '../../../lib/workoutEntryTool'
 import { Client } from "langsmith"
 
 // LangChain imports
@@ -28,7 +29,7 @@ const chatModel = new ChatOpenAI({
 // Initialize the agent executor
 const initializeAgent = async () => {
   const executor = await initializeAgentExecutorWithOptions(
-    [muscleBalanceAnalysis, dateTimeTool],
+    [muscleBalanceAnalysis, dateTimeTool, workoutEntryTool],
     chatModel,
     {
       agentType: "openai-functions",
@@ -41,6 +42,7 @@ const initializeAgent = async () => {
         prefix: `You are an intelligent gym assistant named Jim that helps members with workout advice and analysis. 
         You have access to a workout analysis tool that can detect muscle imbalances and provide recommendations.
         You can also provide current date and time information when asked.
+        You can now log workouts when members tell you about their training sessions.
         
         When to use the workout analysis tool:
         - When members ask about their workout balance or progress
@@ -52,11 +54,15 @@ const initializeAgent = async () => {
         - When members ask about current time or date
         - When they need to know what day of the week it is
         - When scheduling or timing related questions come up
+
+        When to use the workout entry tool:
+        - When members tell you about a workout they just completed
+        - When they want to log their training session
+        - When they describe exercises they performed
         
         Always be friendly, clear, and safety-focused. Address members by their first name when appropriate.
         If you use the analysis tool, explain its findings in a helpful and encouraging way. Be very concise.`
       },
-      // Add tracing configuration
       callbacks: [{
         handleLLMStart: () => console.log("🔄 Starting Jim AI interaction..."),
         handleLLMEnd: () => console.log("✅ Jim AI interaction completed"),

@@ -5,6 +5,7 @@ import { OpenAI } from 'openai'
 import { toast } from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import AIAssistant from './ai/AIAssistant'
+import { workoutEventEmitter, WORKOUT_ADDED_EVENT } from '../../lib/workoutEntryTool'
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -642,6 +643,21 @@ const WorkoutLog = () => {
   // Add useEffect to fetch data on component mount
   useEffect(() => {
     fetchWorkoutHistory()
+
+    // Listen for new workouts added by Jim AI
+    const handleWorkoutAdded = (event) => {
+      const newWorkout = event.detail;
+      setWorkoutData(prevData => [newWorkout, ...prevData]);
+      toast.success(`Successfully logged ${newWorkout.exercise || 'workout'}!`);
+    };
+
+    // Subscribe to workout added events
+    workoutEventEmitter.addEventListener(WORKOUT_ADDED_EVENT, handleWorkoutAdded);
+
+    // Cleanup subscription
+    return () => {
+      workoutEventEmitter.removeEventListener(WORKOUT_ADDED_EVENT, handleWorkoutAdded);
+    };
   }, [])
 
   // Initialize speech recognition and states
