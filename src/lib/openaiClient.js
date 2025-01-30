@@ -11,9 +11,10 @@ const client = new Client({
 });
 // Initialize LangChain's ChatOpenAI with tracing
 const langChainModel = new ChatOpenAI({
-  modelName: "gpt-4",
+  modelName: "gpt-3.5-turbo",
   temperature: 0,
   openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  streaming: true,
   configuration: {
     baseURL: "https://api.openai.com/v1"
   }
@@ -77,9 +78,6 @@ const ticketChain = ticketPromptTemplate
 
 export const generateTicketResponseWithTracing = async (ticket, onToken) => {
   try {
-    // Set up streaming callback
-    window.streamCallback = onToken;
-    
     const relevantEntries = await findRelevantEntries(ticket.title + " " + ticket.description);
     
     const knowledgeBaseContext = relevantEntries.length > 0 
@@ -88,7 +86,24 @@ export const generateTicketResponseWithTracing = async (ticket, onToken) => {
         ).join('\n\n')}`
       : '';
 
-    const response = await ticketChain.invoke({
+    let fullResponse = '';
+    
+    // Create a new chain for this specific invocation with streaming callbacks
+    const streamingChain = ticketPromptTemplate
+      .pipe(langChainModel)
+      .pipe(new StringOutputParser())
+      .withConfig({
+        callbacks: [{
+          handleLLMNewToken: (token) => {
+            fullResponse += token;
+            if (onToken) {
+              onToken(token);
+            }
+          }
+        }]
+      });
+
+    await streamingChain.invoke({
       title: ticket.title,
       memberName: ticket.memberName,
       description: ticket.description,
@@ -97,20 +112,16 @@ export const generateTicketResponseWithTracing = async (ticket, onToken) => {
       knowledgeBaseContext
     });
 
-    // Clean up streaming callback
-    window.streamCallback = null;
-
     if (relevantEntries.length > 0) {
       const citations = '\n\n---\nSources:\n' + relevantEntries
         .map(entry => `• ${entry.title}`)
         .join('\n');
-      return response + citations;
+      return fullResponse + citations;
     }
 
-    return response;
+    return fullResponse;
   } catch (error) {
     console.error('Error generating AI response:', error);
-    window.streamCallback = null; // Clean up on error
     throw error;
   }
 };

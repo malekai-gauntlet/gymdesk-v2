@@ -322,7 +322,7 @@ export default function TicketDetail({ ticket, onClose }) {
       })
       
       // Call the OpenAI function with streaming callback
-      const aiResponse = await generateTicketResponseWithTracing({
+      await generateTicketResponseWithTracing({
         ...ticket,
         memberName: `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim() || 'Customer',
         agentName: agentData ? `${agentData.first_name || ''} ${agentData.last_name || ''}`.trim() : 'Support Agent',
@@ -332,8 +332,6 @@ export default function TicketDetail({ ticket, onClose }) {
         setReplyText(prev => prev + token)
       })
       
-      // Set the final response (includes citations)
-      setReplyText(aiResponse)
       toast.success('AI response generated')
       
     } catch (error) {

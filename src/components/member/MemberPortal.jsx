@@ -1246,67 +1246,69 @@ const WorkoutLog = () => {
       </div>
 
       {/* Injury Prevention Corner */}
-      <div className="mt-8 bg-white/5 rounded-xl p-6 backdrop-blur-sm">
-        <div className="flex items-center gap-2 mb-6">
-          <h3 className="text-xl font-semibold text-white/90">Injury Prevention Corner</h3>
-          <div className="relative group">
-            <button
-              className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
-              title="About Injury Prevention"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
-            <div className="absolute left-0 top-full mt-2 w-80 p-4 rounded-lg bg-gray-900/95 backdrop-blur-sm shadow-xl border border-gray-800 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
-              <h4 className="font-medium text-white mb-2">About Injury Prevention</h4>
-              <p className="text-sm text-gray-300">
-                Get personalized recommendations to help prevent injuries based on your workout patterns and recovery status.
-              </p>
+      {false && (  // Adding false condition to hide this section
+        <div className="mt-8 bg-white/5 rounded-xl p-6 backdrop-blur-sm">
+          <div className="flex items-center gap-2 mb-6">
+            <h3 className="text-xl font-semibold text-white/90">Injury Prevention Corner</h3>
+            <div className="relative group">
+              <button
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                title="About Injury Prevention"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+              <div className="absolute left-0 top-full mt-2 w-80 p-4 rounded-lg bg-gray-900/95 backdrop-blur-sm shadow-xl border border-gray-800 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+                <h4 className="font-medium text-white mb-2">About Injury Prevention</h4>
+                <p className="text-sm text-gray-300">
+                  Get personalized recommendations to help prevent injuries based on your workout patterns and recovery status.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white/5 rounded-lg p-6 border border-gray-800">
-          <h4 className="text-lg font-medium text-white mb-4">Recommendations</h4>
-          {isLoadingRecommendations ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/20"></div>
-            </div>
-          ) : recommendationsError ? (
-            <div className="text-center text-sm text-gray-400">
-              Unable to load recommendations. Please try again later.
-            </div>
-          ) : recommendations?.length > 0 ? (
-            <div className="space-y-4">
-              {recommendations.map((rec, index) => (
-                <div 
-                  key={index} 
-                  className="p-4 bg-white/5 rounded-lg border border-gray-800/50 hover:border-gray-800 transition-colors"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0 mt-1">
-                      <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h14M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-300">{rec.recommendation}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(rec.created_at).toLocaleDateString()} at {new Date(rec.created_at).toLocaleTimeString()}
-                      </p>
+          <div className="bg-white/5 rounded-lg p-6 border border-gray-800">
+            <h4 className="text-lg font-medium text-white mb-4">Recommendations</h4>
+            {isLoadingRecommendations ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/20"></div>
+              </div>
+            ) : recommendationsError ? (
+              <div className="text-center text-sm text-gray-400">
+                Unable to load recommendations. Please try again later.
+              </div>
+            ) : recommendations?.length > 0 ? (
+              <div className="space-y-4">
+                {recommendations.map((rec, index) => (
+                  <div 
+                    key={index} 
+                    className="p-4 bg-white/5 rounded-lg border border-gray-800/50 hover:border-gray-800 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                        <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h14M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-300">{rec.recommendation}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(rec.created_at).toLocaleDateString()} at {new Date(rec.created_at).toLocaleTimeString()}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-400">
-              Start logging your workouts to get personalized injury prevention recommendations
-            </div>
-          )}
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+                Start logging your workouts to get personalized injury prevention recommendations
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </>
   )
 }
