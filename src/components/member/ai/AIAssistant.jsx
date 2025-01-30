@@ -18,10 +18,10 @@ import { BufferMemory } from "langchain/memory"
 import ThinkingSteps from './ThinkingSteps'
 
 // Initialize LangSmith client
-const client = new Client({
-  apiUrl: "https://api.smith.langchain.com",
-  apiKey: import.meta.env.VITE_LANGCHAIN_API_KEY,
-});
+  const client = new Client({
+    apiUrl: "https://api.smith.langchain.com",
+    apiKey: import.meta.env.VITE_LANGCHAIN_API_KEY,
+  });
 
 // Initialize LangChain Chat Model
 const chatModel = new ChatOpenAI({
@@ -46,12 +46,14 @@ const initializeAgent = async () => {
         outputKey: "output",
       }),
       agentArgs: {
-        prefix: `You are an intelligent gym assistant named Jim that helps members with workout advice and analysis. 
-        You have access to a workout analysis tool that can detect muscle imbalances and provide recommendations.
-        You can also provide current date and time information when asked.
-        You can now log workouts when members tell you about their training sessions.
-        You can help members view and book fitness classes.
-        You can search the gym's knowledge base for facility-specific information.
+        prefix: `You are an intelligent gym assistant named Jim that helps gym members in a variety of ways. 
+        You have access to the following tools:
+        A knowledge base tool that can search the gym's knowledge base for facility-specific information.
+        A workout analysis tool that can detect muscle imbalances and provide injury-prevention recommendations.
+        A date/time tool that can provide current date and time information.
+        A workout entry tool that can log workouts when members tell you about their training sessions.
+        A workout logging tool that logs workouts for a member when they tell you what they did.
+        A class booking tool that can help members view available classes and book classes.
 
         When to use the knowledge base tool:
         - When members ask about gym policies or rules
