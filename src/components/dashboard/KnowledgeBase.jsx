@@ -67,7 +67,8 @@ export default function KnowledgeBase() {
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag), // Split by comma and remove empty tags
         category: 'general', // Default category
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        embedding_text: `Title: ${formData.title}\nContent: ${formData.content}\nTags: ${formData.tags}`
       }
 
       const { data, error } = await supabase
