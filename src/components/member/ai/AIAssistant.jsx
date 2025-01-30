@@ -6,6 +6,7 @@ import { muscleBalanceAnalysis } from '../../../lib/workoutAnalysis'
 import { dateTimeTool } from '../../../lib/utilityTools'
 import { workoutEntryTool } from '../../../lib/workoutEntryTool'
 import { classBookingTool } from '../../../lib/classBookingTool'
+import { workoutHistoryTool } from '../../../lib/workoutHistoryTool'
 import { Client } from "langsmith"
 import { supabase } from '../../../lib/supabaseClient'
 
@@ -36,7 +37,7 @@ let addThinkingStepCallback = null;
 // Modify the initializeAgent function
 const initializeAgent = async () => {
   const executor = await initializeAgentExecutorWithOptions(
-    [muscleBalanceAnalysis, dateTimeTool, workoutEntryTool, classBookingTool, knowledgeBaseTool],
+    [muscleBalanceAnalysis, dateTimeTool, workoutEntryTool, classBookingTool, knowledgeBaseTool, workoutHistoryTool],
     chatModel,
     {
       agentType: "openai-functions",
@@ -53,6 +54,7 @@ const initializeAgent = async () => {
         A date/time tool that can provide current date and time information.
         A class booking tool that can help members view available classes and book classes.
         A workout entry tool that can log workouts when members tell you about their training sessions.
+        A workout history tool that can show past workouts and provide exercise statistics.
 
 
         Use the knowledge base tool whenever members ask about gym policies or rules, or need information about specific services or amenities or anything else related to the gym.
@@ -60,6 +62,7 @@ const initializeAgent = async () => {
         Use the datetime tool when members ask about time or date, or are asking a question that requires knowledge of the date. (e.g. "What classes are available today? Or tomororow? Or next week?")
         Use the class booking tool when members ask about classes, or want to book a class. Use the class booking tool with action "list_classes" to show available classes, and "book_class" with the exact class name to book a specific class.
         Use the workout entry tool when members tell you about a workout they just completed, or want to log their training session.
+        Use the workoutHistory tool when members ask about their past workouts, exercise statistics, or workout summaries. Use "show_history" for specific dates (YYYY-MM-DD format), "exercise_stats" for specific exercise analysis, and "summary" for overall workout patterns. When reporting workout summaries, clearly distinguish between number of unique workout days and total exercises performed.
         
         Always be friendly, clear, and concise. Address members by their first name when appropriate.`
       },
