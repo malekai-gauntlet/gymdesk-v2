@@ -28,6 +28,7 @@ import ThinkingSteps from './ThinkingSteps'
 const chatModel = new ChatOpenAI({
   modelName: "gpt-4",
   temperature: 0.7,
+  streaming: true,
   openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
 });
 
@@ -67,28 +68,42 @@ const initializeAgent = async () => {
         Always be friendly, clear, and concise. Address members by their first name when appropriate.`
       },
       callbacks: [{
-        handleStart: () => {
+        handleStart: async (action) => {
           console.log("Agent starting");
-          addThinkingStepCallback?.("Analyzing your message...");
-        },
-        handleAgentAction: (action) => {
-          console.log("Agent action:", action);
-          addThinkingStepCallback?.("Identifying the most appropriate tool...");
-          if (action.tool === "searchKnowledgeBase") {
-            addThinkingStepCallback?.("Checking our gym's knowledge base for accurate information...");
-          } else if (action.tool === "muscleBalanceAnalysis") {
-            addThinkingStepCallback?.("Analyzing your workout patterns and potential injury risks...");
-          } else {
-            addThinkingStepCallback?.(`I'll use my ${action.tool} tool to help...`);
+          if (addThinkingStepCallback) {
+            await addThinkingStepCallback("Analyzing your message...");
           }
         },
-        handleToolEnd: (output) => {
-          console.log("🛠️ Tool execution completed", { output });
-          addThinkingStepCallback?.("Processing the results from our analysis...");
+        handleAgentAction: async (action) => {
+          console.log("Agent action:", action);
+          if (addThinkingStepCallback) {
+            // await addThinkingStepCallback("Identifying the most appropriate tool...");
+            if (action.tool === "searchKnowledgeBase") {
+              await addThinkingStepCallback("Checking our gym's knowledge base for accurate information...");
+            } else if (action.tool === "muscleBalanceAnalysis") {
+              await addThinkingStepCallback("Analyzing your workout patterns and potential injury risks...");
+            } else {
+              await addThinkingStepCallback(`Using ${action.tool} to help you...`);
+            }
+          }
         },
-        handleAgentEnd: () => {
+        handleToolEnd: async (output) => {
+          console.log("🛠️ Tool execution completed", { output });
+          if (addThinkingStepCallback) {
+            await addThinkingStepCallback("Processing the results...");
+          }
+        },
+        handleAgentEnd: async () => {
           console.log("Agent ending");
-          addThinkingStepCallback?.("Finalizing your personalized response...");
+          if (addThinkingStepCallback) {
+            // await addThinkingStepCallback("Finalizing your response...");
+          }
+        },
+        handleLLMNewToken: (token) => {
+          console.log("New token:", token);
+        },
+        handleLLMError: (error) => {
+          console.error("LLM error:", error);
         }
       }],
       tags: ["jim-ai", "gym-assistant"],
@@ -114,6 +129,7 @@ const AIAssistant = () => {
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [streamingMessage, setStreamingMessage] = useState('')
   const messagesEndRef = useRef(null)
   
   // Add new state for thinking steps
@@ -201,20 +217,15 @@ const AIAssistant = () => {
     e.preventDefault()
     if (!inputValue.trim()) return
     
-    // Clear previous thinking steps
     clearThinkingSteps()
-    
-    // Add initial thinking step
     addThinkingStep("Analyzing your message...")
     
-    // Add user message
     const userMessage = { role: 'user', content: inputValue }
     setMessages(prev => [...prev, userMessage])
     setInputValue('')
     setIsTyping(true)
     
     try {
-      // Add user context
       const userContext = `\nMember Context:
 - Name: ${user?.user_metadata?.first_name} ${user?.user_metadata?.last_name}
 - Membership Status: Member
@@ -225,12 +236,39 @@ const AIAssistant = () => {
         throw new Error('Agent executor not initialized');
       }
 
-      // Execute the agent with just the input and user context
-      const result = await agentExecutor.invoke({
-        input: `${inputValue}\n\n${userContext}`
-      });
+      let streamedText = '';
+      let isFirstToken = true;
+      let tokenBuffer = '';
+      const MIN_CHARS_TO_SHOW = 15; // Wait for at least 15 characters before showing the bubble
       
-      console.log('Agent result:', result);
+      const result = await agentExecutor.invoke(
+        {
+          input: `${inputValue}\n\n${userContext}`
+        },
+        {
+          callbacks: [{
+            handleLLMNewToken: (token) => {
+              if (isFirstToken) {
+                tokenBuffer += token;
+                if (tokenBuffer.length >= MIN_CHARS_TO_SHOW) {
+                  // Only create the assistant message when we have enough text
+                  setMessages(prev => [...prev, { role: 'assistant', content: tokenBuffer }]);
+                  streamedText = tokenBuffer;
+                  isFirstToken = false;
+                  clearThinkingSteps(); // Clear thinking steps when message bubble appears
+                }
+              } else {
+                streamedText += token;
+                setMessages(prev => {
+                  const newMessages = [...prev];
+                  newMessages[newMessages.length - 1].content = streamedText;
+                  return newMessages;
+                });
+              }
+            }
+          }]
+        }
+      );
 
       // Check for injury prevention recommendations in the response
       const injuryPreventionRegex = /\[INJURY_PREVENTION\](.*?)(?=\[INJURY_PREVENTION\]|$)/gs;
@@ -242,20 +280,11 @@ const AIAssistant = () => {
         }
       }
 
-      const aiMessage = {
-        role: 'assistant',
-        content: result.output
-      };
-      
-      console.log('AI Message formatted:', aiMessage);
-      setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error getting AI response:', error)
       toast.error('Sorry, I had trouble responding. Please try again.')
     } finally {
       setIsTyping(false)
-      // Clear thinking steps when done
-      clearThinkingSteps()
     }
   }
 
@@ -317,8 +346,8 @@ const AIAssistant = () => {
           />
         )}
         
-        {/* Only show typing indicator when there are no thinking steps */}
-        {isTyping && thinkingSteps.length === 0 && (
+        {/* Only show typing indicator when there are no thinking steps and no message is being streamed */}
+        {isTyping && thinkingSteps.length === 0 && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="flex items-start gap-3">
             <div className="h-8 w-8 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
               <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
